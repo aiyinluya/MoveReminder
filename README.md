@@ -29,6 +29,19 @@ Windows 久坐全屏提醒助手。程序常驻托盘，按固定间隔弹出全
 - 便携模式：若 exe 同目录存在 `MoveReminder.portable` 或 `settings.json`，则读写 exe 同目录的 `settings.json`
 - 图片缓存：配置目录下的 `images/cache/`
 
+## 开发时运行
+
+在仓库根目录执行：
+
+```powershell
+dotnet restore .\MoveReminder.sln
+dotnet run --project .\src\MoveReminder\MoveReminder.csproj
+```
+
+运行后不会出现普通主窗口，程序会进入系统托盘。右键托盘图标可打开「设置」、触发「立即提醒」或「退出」。
+
+如果提示已有实例在运行，请先从托盘菜单点击「退出」，再重新执行 `dotnet run`。
+
 ## 本地构建
 
 ```powershell
@@ -50,10 +63,24 @@ dotnet build .\MoveReminder.sln -c Release
 artifacts\MoveReminder-publish\MoveReminder.exe
 ```
 
+发布完成后，直接双击上面的 `MoveReminder.exe` 即可运行发布版。
+
 如果正在运行旧版 exe，发布可能因为文件被占用而失败。请先从托盘菜单退出旧进程，或指定新输出目录：
 
 ```powershell
 .\scripts\publish.ps1 -OutputDir .\artifacts\MoveReminder-publish-1.1.26
+```
+
+也可以手动执行等价的 `dotnet publish`：
+
+```powershell
+dotnet publish .\src\MoveReminder\MoveReminder.csproj `
+  -c Release `
+  -r win-x64 `
+  --self-contained true `
+  /p:PublishSingleFile=true `
+  /p:IncludeNativeLibrariesForSelfExtract=true `
+  -o .\artifacts\MoveReminder-publish
 ```
 
 ## GitHub Actions
