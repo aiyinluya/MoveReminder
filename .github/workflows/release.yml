@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag, for example v1.1.26"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark this release as a prerelease"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -26,15 +37,37 @@ jobs:
         shell: pwsh
         run: .\scripts\publish.ps1 -OutputDir .\artifacts\MoveReminder-publish
 
-      - name: Upload artifact
+      - name: Package release assets
+        shell: pwsh
+        run: |
+          $releaseDir = ".\artifacts\release"
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+          Copy-Item ".\artifacts\MoveReminder-publish\MoveReminder.exe" "$releaseDir\MoveReminder.exe" -Force
+          Compress-Archive -Path "$releaseDir\MoveReminder.exe" -DestinationPath "$releaseDir\MoveReminder-win-x64.zip" -Force
+          Get-FileHash "$releaseDir\MoveReminder.exe" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  MoveReminder.exe" } |
+            Set-Content "$releaseDir\MoveReminder.exe.sha256" -Encoding ascii
+          Get-FileHash "$releaseDir\MoveReminder-win-x64.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  MoveReminder-win-x64.zip" } |
+            Set-Content "$releaseDir\MoveReminder-win-x64.zip.sha256" -Encoding ascii
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: MoveReminder-win-x64
-          path: artifacts/MoveReminder-publish/MoveReminder.exe
+          path: |
+            artifacts/release/MoveReminder.exe
+            artifacts/release/MoveReminder-win-x64.zip
+            artifacts/release/*.sha256
           if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/MoveReminder-publish/MoveReminder.exe
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          prerelease: ${{ inputs.prerelease || false }}
+          files: |
+            artifacts/release/MoveReminder.exe
+            artifacts/release/MoveReminder-win-x64.zip
+            artifacts/release/*.sha256
           generate_release_notes: true

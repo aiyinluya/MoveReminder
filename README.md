@@ -87,8 +87,8 @@ dotnet publish .\src\MoveReminder\MoveReminder.csproj `
 
 仓库包含两类工作流：
 
-- `ci.yml`：在 Pull Request 和 `main` 推送时执行 restore/build。
-- `release.yml`：推送 `v*` 标签时构建自包含单文件 exe，并上传到 GitHub Release。
+- `ci.yml`：在 Pull Request 和 `main` 推送时执行 restore/build；推送到 `main` 时还会生成 7 天保留的临时构建产物。
+- `release.yml`：推送 `v*` 标签或手动触发时构建自包含单文件 exe，打包为 `MoveReminder-win-x64.zip`，生成 SHA256 校验文件，并上传到 GitHub Release。
 
 发版流程：
 
@@ -96,6 +96,14 @@ dotnet publish .\src\MoveReminder\MoveReminder.csproj `
 git tag v1.1.26
 git push origin v1.1.26
 ```
+
+发布完成后，用户可在 GitHub 仓库的 **Releases** 页面下载：
+
+- `MoveReminder.exe`：可直接运行的 Windows x64 自包含单文件
+- `MoveReminder-win-x64.zip`：压缩包形式，适合分发
+- `*.sha256`：用于校验下载文件完整性
+
+也可以在 GitHub 页面进入 **Actions → Release → Run workflow**，填写 `tag_name`（例如 `v1.1.26`）手动创建发布。
 
 ## 参与贡献
 
