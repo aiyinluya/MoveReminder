@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>MoveReminder</RootNamespace>
+    <AssemblyName>MoveReminder</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Version>1.1.26</Version>
+    <Product>动动提醒</Product>
+    <Description>Windows 久坐全屏提醒助手</Description>
+  </PropertyGroup>
+
+  <!-- Release：PDB 嵌入 exe/dll，便于「单文件发布」时输出目录更干净 -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <!-- 仅自包含单文件支持压缩（框架依赖单文件开启会 NETSDK1176） -->
+  <PropertyGroup Condition="'$(SelfContained)' == 'true'">
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+</Project>
