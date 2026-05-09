@@ -10,7 +10,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>1.1.26</Version>
+    <Version>1.1.36</Version>
     <Product>动动提醒</Product>
     <Description>Windows 久坐全屏提醒助手</Description>
   </PropertyGroup>

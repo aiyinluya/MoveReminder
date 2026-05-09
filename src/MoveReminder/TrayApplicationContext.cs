@@ -14,8 +14,11 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly Task _ipcWaitTask;
     private AppSettings _settings;
     private DateTime _nextReminderUtc;
+    private TimeSpan _currentCycleDuration;
+    private TimeSpan? _pausedRemaining;
     private bool _sessionLocked;
     private bool _suspended;
+    private TrayIconState _trayIconState;
     private ReminderSession? _reminderSession;
     private SettingsForm? _settingsForm;
 
@@ -31,7 +34,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
         _notifyIcon = new NotifyIcon
         {
-            Icon = new Icon(AppIconFactory.GetTrayIcon(), SystemInformation.SmallIconSize),
+            Icon = AppIconFactory.GetTrayIcon(TrayIconState.Normal),
             Visible = true,
             Text = "动动提醒"
         };
@@ -64,8 +67,7 @@ public sealed class TrayApplicationContext : ApplicationContext
 
     private void Postpone(TimeSpan span)
     {
-        _nextReminderUtc = DateTime.UtcNow.Add(span);
-        UpdateTrayText();
+        ScheduleNext(span);
     }
 
     private void SkipNextBreak()
@@ -126,13 +128,31 @@ public sealed class TrayApplicationContext : ApplicationContext
     private void ScheduleNextFromNow()
     {
         var minutes = Math.Clamp(_settings.IntervalMinutes, 1, 24 * 60);
-        _nextReminderUtc = DateTime.UtcNow.AddMinutes(minutes);
-        UpdateTrayText();
+        ScheduleNext(TimeSpan.FromMinutes(minutes));
     }
 
-    private void UpdateTrayText()
+    private void ScheduleNext(TimeSpan duration)
     {
-        _notifyIcon.Text = $"动动提醒 · 下次约 {LocalNextReminder():HH:mm}";
+        _currentCycleDuration = duration <= TimeSpan.Zero ? TimeSpan.FromMinutes(1) : duration;
+        _nextReminderUtc = DateTime.UtcNow.Add(_currentCycleDuration);
+        _pausedRemaining = null;
+        UpdateTrayStatus();
+    }
+
+    private void UpdateTrayStatus()
+    {
+        var remaining = GetRemaining();
+        var remainingText = FormatRemaining(remaining);
+        var state = _sessionLocked || _suspended ? "暂停" : "下次";
+        _notifyIcon.Text = $"动动提醒 · {state} {LocalNextReminder():HH:mm} · 剩 {remainingText}";
+
+        var iconState = GetTrayIconState(remaining);
+        if (iconState == _trayIconState)
+            return;
+
+        _trayIconState = iconState;
+        _notifyIcon.Icon = AppIconFactory.GetTrayIcon(iconState);
+        _settingsForm?.ApplyTrayIconState(iconState);
     }
 
     private DateTime LocalNextReminder()
@@ -140,8 +160,44 @@ public sealed class TrayApplicationContext : ApplicationContext
         return TimeZoneInfo.ConvertTimeFromUtc(_nextReminderUtc, TimeZoneInfo.Local);
     }
 
+    private TimeSpan GetRemaining()
+    {
+        if (_pausedRemaining is { } paused)
+            return paused < TimeSpan.Zero ? TimeSpan.Zero : paused;
+
+        var remaining = _nextReminderUtc - DateTime.UtcNow;
+        return remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
+    }
+
+    private TrayIconState GetTrayIconState(TimeSpan remaining)
+    {
+        if (_currentCycleDuration <= TimeSpan.Zero)
+            return TrayIconState.Normal;
+
+        var remainingPercent = remaining.TotalMilliseconds / _currentCycleDuration.TotalMilliseconds * 100.0;
+        var urgentPercent = Math.Clamp(_settings.TrayUrgentPercent, 1, 98);
+        var warningPercent = Math.Clamp(_settings.TrayWarningPercent, urgentPercent + 1, 99);
+
+        if (remainingPercent <= urgentPercent)
+            return TrayIconState.Urgent;
+        if (remainingPercent <= warningPercent)
+            return TrayIconState.Warning;
+        return TrayIconState.Normal;
+    }
+
+    private static string FormatRemaining(TimeSpan remaining)
+    {
+        if (remaining <= TimeSpan.Zero)
+            return "即将";
+        if (remaining.TotalMinutes >= 1)
+            return $"{Math.Ceiling(remaining.TotalMinutes):0}分钟";
+        return $"{Math.Ceiling(remaining.TotalSeconds):0}秒";
+    }
+
     private void Timer_Tick(object? sender, EventArgs e)
     {
+        UpdateTrayStatus();
+
         if (_reminderSession is { HasOpenForms: true })
         {
             return;
@@ -202,6 +258,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             if (_settingsForm.WindowState == FormWindowState.Minimized)
                 _settingsForm.WindowState = FormWindowState.Normal;
             _settingsForm.Show();
+            _settingsForm.ApplyTrayIconState(_trayIconState);
             _settingsForm.Activate();
             _settingsForm.BringToFront();
             return;
@@ -210,6 +267,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         _settingsForm = new SettingsForm(_settings);
         _settingsForm.FormClosed += OnSettingsFormClosed;
         _settingsForm.Show();
+        _settingsForm.ApplyTrayIconState(_trayIconState);
     }
 
     private void OnSettingsFormClosed(object? sender, FormClosedEventArgs e)
@@ -253,13 +311,18 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         if (reason == SessionSwitchReason.SessionLock)
         {
+            _pausedRemaining = GetRemaining();
             _sessionLocked = true;
             CloseReminderIfOpen();
+            UpdateTrayStatus();
         }
         else if (reason == SessionSwitchReason.SessionUnlock)
         {
             _sessionLocked = false;
-            ScheduleNextFromNow();
+            if (_pausedRemaining is { } remaining)
+                _nextReminderUtc = DateTime.UtcNow.Add(remaining);
+            _pausedRemaining = null;
+            UpdateTrayStatus();
         }
     }
 
@@ -279,13 +342,18 @@ public sealed class TrayApplicationContext : ApplicationContext
     {
         if (mode == PowerModes.Suspend)
         {
+            _pausedRemaining = GetRemaining();
             _suspended = true;
             CloseReminderIfOpen();
+            UpdateTrayStatus();
         }
         else if (mode == PowerModes.Resume)
         {
             _suspended = false;
-            ScheduleNextFromNow();
+            if (_pausedRemaining is { } remaining)
+                _nextReminderUtc = DateTime.UtcNow.Add(remaining);
+            _pausedRemaining = null;
+            UpdateTrayStatus();
         }
     }
 

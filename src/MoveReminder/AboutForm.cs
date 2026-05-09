@@ -11,7 +11,7 @@ internal sealed class AboutForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(440, 280);
+        ClientSize = new Size(500, 340);
         BackColor = UiTheme.PageBack;
         Font = UiTheme.BodyFont;
         Icon = AppIconFactory.CloneForForm();
@@ -25,7 +25,7 @@ internal sealed class AboutForm : Form
             RowCount = 3,
             Padding = Padding.Empty
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
 
@@ -40,11 +40,11 @@ internal sealed class AboutForm : Form
         });
         header.Controls.Add(new Label
         {
-            Text = $"版本 {v}  ·  本地久坐全屏提醒",
+            Text = $"版本 {v}  ·  本地优先的久坐提醒与休息管理工具",
             ForeColor = Color.FromArgb(230, 255, 252),
             Font = UiTheme.HeaderSubFont,
             AutoSize = true,
-            Location = new Point(20, 42)
+            Location = new Point(20, 46)
         });
 
         var body = new Label
@@ -53,12 +53,17 @@ internal sealed class AboutForm : Form
             Padding = new Padding(24, 18, 24, 8),
             ForeColor = UiTheme.BodyText,
             AutoSize = false,
-            MaximumSize = new Size(392, 0),
+            MaximumSize = new Size(452, 0),
             Text =
-                "· 托盘计时，到点全屏提示；锁屏与睡眠时不打扰。\r\n" +
-                "· 支持文字或图片提醒；多显示器时每屏各一层。\r\n" +
-                "· 配置：" + SettingsStore.SettingsFilePath + "\r\n\r\n" +
-                "本软件不上传任何数据。"
+                "动动提醒用于帮助长时间伏案的用户建立稳定的休息节奏。\r\n\r\n" +
+                "核心能力：\r\n" +
+                "· 托盘常驻计时，按设定间隔弹出全屏提醒。\r\n" +
+                "· 支持文字提醒与图片提醒，多显示器环境下逐屏展示。\r\n" +
+                "· 锁屏、睡眠期间自动暂停，恢复后继续剩余倒计时。\r\n" +
+                "· 所有设置与图片缓存均保存在本机，不上传任何数据。\r\n\r\n" +
+                "作者：码事漫谈\r\n" +
+                "邮箱：oioihoii@163.com\r\n" +
+                "配置文件：" + SettingsStore.SettingsFilePath
         };
 
         var bottom = new FlowLayoutPanel

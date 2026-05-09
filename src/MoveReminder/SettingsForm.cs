@@ -2,7 +2,9 @@ namespace MoveReminder;
 
 public sealed class SettingsForm : Form
 {
-    private readonly NumericUpDown _interval = new() { Minimum = 5, Maximum = 480, Width = 108, Font = UiTheme.BodyFont };
+    private const int AutoCloseAbsoluteMaxSeconds = 600;
+
+    private readonly NumericUpDown _interval = new() { Minimum = 1, Maximum = 480, Width = 78, Font = UiTheme.BodyFont };
     private readonly TextBox _text = new()
     {
         Font = UiTheme.BodyFont,
@@ -15,7 +17,9 @@ public sealed class SettingsForm : Form
     };
     private readonly TextBox _imagePath = new() { Font = UiTheme.BodyFont, BorderStyle = BorderStyle.FixedSingle, MinimumSize = new Size(80, 28) };
     private readonly Button _browse = new() { Text = "浏览…", Size = new Size(96, 30), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
-    private readonly NumericUpDown _autoClose = new() { Minimum = 10, Maximum = 600, Width = 108, Font = UiTheme.BodyFont };
+    private readonly NumericUpDown _autoClose = new() { Minimum = 10, Maximum = AutoCloseAbsoluteMaxSeconds, Width = 78, Font = UiTheme.BodyFont };
+    private readonly NumericUpDown _trayWarningPercent = new() { Minimum = 1, Maximum = 99, Width = 78, Font = UiTheme.BodyFont };
+    private readonly NumericUpDown _trayUrgentPercent = new() { Minimum = 1, Maximum = 98, Width = 78, Font = UiTheme.BodyFont };
     private readonly CheckBox _startup = new() { Text = "开机自动启动", AutoSize = true, Font = UiTheme.BodyFont, ForeColor = UiTheme.BodyText };
     private readonly RadioButton _modeTextRadio = new()
     {
@@ -57,10 +61,12 @@ public sealed class SettingsForm : Form
     private bool _historyThumbnailsLoaded;
     private readonly TableLayoutPanel _root;
     private readonly Panel _header;
+    private readonly Label _headerSubtitle;
     private readonly Panel _cardWrap;
     private readonly TableLayoutPanel _settingsBody;
     private readonly Panel _generalChrome;
     private readonly FlowLayoutPanel _buttons;
+    private readonly Button _saveButton;
     private readonly TextColorPickerSection _colorPicker;
     private AppSettings _working;
 
@@ -82,15 +88,24 @@ public sealed class SettingsForm : Form
         Icon = AppIconFactory.CloneForForm();
 
         _interval.Value = decimal.Clamp(_working.IntervalMinutes, _interval.Minimum, _interval.Maximum);
+        SyncAutoCloseMaximum();
         _text.Text = _working.ReminderText;
         _imagePath.Text = _working.ImagePath;
         _autoClose.Value = decimal.Clamp(_working.AutoCloseSeconds, _autoClose.Minimum, _autoClose.Maximum);
+        _trayWarningPercent.Value = decimal.Clamp(_working.TrayWarningPercent, _trayWarningPercent.Minimum, _trayWarningPercent.Maximum);
+        _trayUrgentPercent.Value = decimal.Clamp(_working.TrayUrgentPercent, _trayUrgentPercent.Minimum, _trayUrgentPercent.Maximum);
         _startup.Checked = _working.StartWithWindows;
 
         _colorPicker = new TextColorPickerSection(ReminderTextColorHelper.Resolve(_working.ReminderTextColorHex));
 
         _browse.FlatAppearance.BorderColor = UiTheme.Border;
         _browse.Click += Browse_Click;
+
+        _interval.ValueChanged += (_, _) => SyncAutoCloseMaximum();
+        HookNumericEnterCommit(_interval);
+        HookNumericEnterCommit(_autoClose);
+        HookNumericEnterCommit(_trayWarningPercent);
+        HookNumericEnterCommit(_trayUrgentPercent);
 
         _text.TextChanged += (_, _) => SyncReminderTextScrollbars();
         _text.SizeChanged += (_, _) => SyncReminderTextScrollbars();
@@ -120,14 +135,15 @@ public sealed class SettingsForm : Form
             AutoSize = true,
             Location = new Point(22, 18)
         });
-        _header.Controls.Add(new Label
+        _headerSubtitle = new Label
         {
-            Text = "间隔与提醒内容",
-            ForeColor = Color.FromArgb(230, 255, 252),
+            Text = "专注间隔、提醒内容与状态预警",
+            ForeColor = UiTheme.HeaderSubForeFor(TrayIconState.Normal),
             Font = UiTheme.HeaderSubFont,
             AutoSize = true,
             Location = new Point(22, 50)
-        });
+        };
+        _header.Controls.Add(_headerSubtitle);
 
         _cardWrap = new Panel
         {
@@ -222,20 +238,20 @@ public sealed class SettingsForm : Form
             BackColor = UiTheme.PageBack,
             WrapContents = false
         };
-        var ok = new Button
+        _saveButton = new Button
         {
             Text = "保存",
             Width = 112,
             Height = 36,
             FlatStyle = FlatStyle.Flat,
-            BackColor = UiTheme.Primary,
+            BackColor = UiTheme.PrimaryFor(TrayIconState.Normal),
             ForeColor = Color.White,
             Cursor = Cursors.Hand,
             Font = new Font(UiTheme.BodyFont.FontFamily, UiTheme.BodyFont.Size + 0.25f, FontStyle.Bold, UiTheme.BodyFont.Unit),
             Margin = new Padding(10, 4, 0, 0)
         };
-        ok.FlatAppearance.BorderSize = 0;
-        ok.Click += SaveButton_Click;
+        _saveButton.FlatAppearance.BorderSize = 0;
+        _saveButton.Click += SaveButton_Click;
 
         var cancel = new Button
         {
@@ -250,7 +266,7 @@ public sealed class SettingsForm : Form
             Margin = new Padding(10, 4, 0, 0)
         };
         cancel.FlatAppearance.BorderColor = UiTheme.Border;
-        _buttons.Controls.Add(ok);
+        _buttons.Controls.Add(_saveButton);
         _buttons.Controls.Add(cancel);
 
         CancelButton = cancel;
@@ -282,6 +298,17 @@ public sealed class SettingsForm : Form
 
     private const int WM_SYSCOMMAND = 0x0112;
     private const int SC_MINIMIZE = 0xF020;
+
+    public void ApplyTrayIconState(TrayIconState state)
+    {
+        var primary = UiTheme.PrimaryFor(state);
+        _header.BackColor = primary;
+        _headerSubtitle.ForeColor = UiTheme.HeaderSubForeFor(state);
+        _saveButton.BackColor = primary;
+        _saveButton.FlatAppearance.MouseOverBackColor = ControlPaint.Light(primary, 0.08f);
+        _saveButton.FlatAppearance.MouseDownBackColor = UiTheme.DarkFor(state);
+        Invalidate(true);
+    }
 
     /// <summary>
     /// 最小化时直接关闭设置窗实例；托盘进程继续运行，下次打开重新创建窗体。
@@ -327,15 +354,43 @@ public sealed class SettingsForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             BackColor = UiTheme.CardBack
         };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 84));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         var row = 0;
-        AddRow(table, row++, "提醒间隔（分钟）", _interval, stretch: false);
-        AddRow(table, row++, "自动关闭（秒）", _autoClose, stretch: false);
+        AddRow(table, row++, "提醒间隔", CreateUnitEditor(_interval, "分钟"), stretch: false);
+        AddRow(table, row++, "自动关闭", CreateUnitEditor(_autoClose, "秒"), stretch: false);
+        AddRow(table, row++, "变黄阈值", CreateUnitEditor(_trayWarningPercent, "%"), stretch: false);
+        AddRow(table, row++, "变红阈值", CreateUnitEditor(_trayUrgentPercent, "%"), stretch: false);
         AddRow(table, row++, string.Empty, _startup, stretch: false);
 
         return table;
+    }
+
+    private static FlowLayoutPanel CreateUnitEditor(Control editor, string unit)
+    {
+        var host = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = Padding.Empty,
+            Margin = Padding.Empty,
+            BackColor = Color.Transparent
+        };
+
+        editor.Margin = Padding.Empty;
+        host.Controls.Add(editor);
+        host.Controls.Add(new Label
+        {
+            Text = unit,
+            AutoSize = true,
+            ForeColor = UiTheme.MutedText,
+            Font = UiTheme.BodyFont,
+            Margin = new Padding(8, 4, 0, 0)
+        });
+        return host;
     }
 
     /// <summary>提醒文字行固定较小高度，剩余空间给颜色与推荐色，避免底部色点被裁切。</summary>
@@ -723,7 +778,19 @@ public sealed class SettingsForm : Form
         }
 
         _historyFlow.PerformLayout();
-        _historyFlow.Parent?.Parent?.PerformLayout();
+        RequestHistoryLayout();
+    }
+
+    private void RequestHistoryLayout()
+    {
+        var viewport = _historyFlow.Parent;
+        var historyStrip = viewport?.Parent;
+        var imageBody = historyStrip?.Parent;
+
+        viewport?.PerformLayout();
+        historyStrip?.PerformLayout();
+        imageBody?.PerformLayout();
+        imageBody?.Invalidate(true);
     }
 
     private void ClearHistoryThumbnails()
@@ -819,6 +886,37 @@ public sealed class SettingsForm : Form
         Close();
     }
 
+    private void SyncAutoCloseMaximum()
+    {
+        var maxByInterval = Math.Max((int)_autoClose.Minimum, (int)_interval.Value * 60);
+        _autoClose.Maximum = Math.Min(AutoCloseAbsoluteMaxSeconds, maxByInterval);
+        if (_autoClose.Value > _autoClose.Maximum)
+            _autoClose.Value = _autoClose.Maximum;
+    }
+
+    private static void HookNumericEnterCommit(NumericUpDown editor)
+    {
+        editor.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter)
+                return;
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            CommitNumericText(editor);
+        };
+    }
+
+    private static void CommitNumericText(NumericUpDown editor)
+    {
+        var text = editor.Text.Trim();
+        if (!decimal.TryParse(text, out var value))
+            value = editor.Value;
+
+        editor.Value = decimal.Clamp(value, editor.Minimum, editor.Maximum);
+        editor.Select(0, editor.Text.Length);
+    }
+
     private bool TryCommit(out string error)
     {
         error = string.Empty;
@@ -827,8 +925,22 @@ public sealed class SettingsForm : Form
         _working.ReminderText = _text.Text.Trim();
         _working.ImagePath = _imagePath.Text.Trim();
         _working.AutoCloseSeconds = (int)_autoClose.Value;
+        _working.TrayWarningPercent = (int)_trayWarningPercent.Value;
+        _working.TrayUrgentPercent = (int)_trayUrgentPercent.Value;
         _working.StartWithWindows = _startup.Checked;
         _working.ReminderTextColorHex = ReminderTextColorHelper.ToStorageHex(_colorPicker.SelectedColor);
+
+        if (_working.TrayUrgentPercent >= _working.TrayWarningPercent)
+        {
+            error = "变红阈值必须小于变黄阈值。";
+            return false;
+        }
+
+        if (_working.AutoCloseSeconds > _working.IntervalMinutes * 60)
+        {
+            error = "自动关闭秒数不能超过提醒间隔。";
+            return false;
+        }
 
         if (_working.ReminderMode == ReminderMode.Text && string.IsNullOrWhiteSpace(_working.ReminderText))
         {
