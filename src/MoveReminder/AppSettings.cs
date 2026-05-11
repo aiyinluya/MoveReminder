@@ -3,7 +3,14 @@ namespace MoveReminder;
 public enum ReminderMode
 {
     Text,
-    Image
+    Image,
+    Creative
+}
+
+public enum CreativeGifLayoutMode
+{
+    FullscreenAdaptive,
+    CustomSize
 }
 
 public sealed class AppSettings
@@ -19,6 +26,16 @@ public sealed class AppSettings
 
     public string ImagePath { get; set; } = string.Empty;
 
+    public string CreativeGifPath { get; set; } = string.Empty;
+
+    public CreativeGifLayoutMode CreativeGifLayoutMode { get; set; } = CreativeGifLayoutMode.FullscreenAdaptive;
+
+    public int CreativeGifSizePercent { get; set; } = 100;
+
+    public int CreativeGifMaxWidthPercent { get; set; } = 100;
+
+    public int CreativeGifMaxHeightPercent { get; set; } = 100;
+
     /// <summary>全屏提醒自动关闭秒数（10–600，且不超过提醒间隔）。</summary>
     public int AutoCloseSeconds { get; set; } = 60;
 
@@ -27,6 +44,8 @@ public sealed class AppSettings
 
     /// <summary>剩余时间低于该百分比时托盘图标变红。</summary>
     public int TrayUrgentPercent { get; set; } = 20;
+
+    public bool ShowImmediatelyAfterSave { get; set; }
 
     public bool StartWithWindows { get; set; }
 
@@ -39,9 +58,15 @@ public sealed class AppSettings
             ReminderText = ReminderText,
             ReminderTextColorHex = ReminderTextColorHex,
             ImagePath = ImagePath,
+            CreativeGifPath = CreativeGifPath,
+            CreativeGifLayoutMode = CreativeGifLayoutMode,
+            CreativeGifSizePercent = CreativeGifSizePercent,
+            CreativeGifMaxWidthPercent = CreativeGifMaxWidthPercent,
+            CreativeGifMaxHeightPercent = CreativeGifMaxHeightPercent,
             AutoCloseSeconds = AutoCloseSeconds,
             TrayWarningPercent = TrayWarningPercent,
             TrayUrgentPercent = TrayUrgentPercent,
+            ShowImmediatelyAfterSave = ShowImmediatelyAfterSave,
             StartWithWindows = StartWithWindows
         };
     }

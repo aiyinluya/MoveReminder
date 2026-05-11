@@ -1,14 +1,16 @@
 # 动动提醒（MoveReminder）
 
-Windows 久坐全屏提醒助手。程序常驻托盘，按固定间隔弹出全屏提醒，支持文字提醒和图片提醒，适合办公、学习时提醒自己起身活动。
+Windows 久坐全屏提醒助手。程序常驻托盘，按固定间隔弹出全屏提醒，支持文字、图片和创意 GIF 提醒，适合办公、学习时提醒自己起身活动。
 
 ## 功能
 
 - 托盘常驻：支持立即提醒、推迟 10/30 分钟、跳过下一次、设置、关于、退出。
 - 文字提醒：自定义提醒文案、文字颜色和推荐色。
 - 图片提醒：选择本地图片，自动缓存到配置目录，支持最近使用缩略图。
+- 创意提醒：导入本地 GIF，自动缓存到配置目录，支持最近使用缩略图、全屏自适应或按比例自定义显示大小。
+- 保存后立即展示：保存设置后可立即弹出一次提醒，便于快速预览当前配置。
 - 多显示器：每块屏幕独立显示全屏提醒，按 `Esc` 可关闭整组提醒。
-- 自动关闭：提醒弹出后按设置秒数自动关闭。
+- 自动关闭：提醒弹出后按设置秒数自动关闭，倒计时以透明悬浮文字显示。
 - 不打扰：锁屏、休眠期间不弹出提醒，解锁/唤醒后重新计时。
 - 开机自启动：通过当前用户注册表 `Run` 项启用或关闭。
 - 单实例：重复启动时唤起设置窗口或提示已运行。
@@ -28,6 +30,7 @@ Windows 久坐全屏提醒助手。程序常驻托盘，按固定间隔弹出全
 - 默认：`%LocalAppData%\MoveReminder\settings.json`
 - 便携模式：若 exe 同目录存在 `MoveReminder.portable` 或 `settings.json`，则读写 exe 同目录的 `settings.json`
 - 图片缓存：配置目录下的 `images/cache/`
+- 创意 GIF 缓存：配置目录下的 `creative/cache/`
 
 ## 开发时运行
 
@@ -68,7 +71,7 @@ artifacts\MoveReminder-publish\MoveReminder.exe
 如果正在运行旧版 exe，发布可能因为文件被占用而失败。请先从托盘菜单退出旧进程，或指定新输出目录：
 
 ```powershell
-.\scripts\publish.ps1 -OutputDir .\artifacts\MoveReminder-publish-1.1.26
+.\scripts\publish.ps1 -OutputDir .\artifacts\MoveReminder-publish-1.2.0
 ```
 
 也可以手动执行等价的 `dotnet publish`：
@@ -93,15 +96,15 @@ dotnet publish .\src\MoveReminder\MoveReminder.csproj `
 发版流程：
 
 ```powershell
-git tag v1.1.26
-git push origin v1.1.26
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 发布完成后，用户可在 GitHub 仓库的 **Releases** 页面下载：
 
 - `MoveReminder.exe`：可直接运行的 Windows x64 自包含单文件
 
-也可以在 GitHub 页面进入 **Actions → Release → Run workflow**，填写 `tag_name`（例如 `v1.1.26`）手动创建发布。
+也可以在 GitHub 页面进入 **Actions → Release → Run workflow**，填写 `tag_name`（例如 `v1.2.0`）手动创建发布。
 
 ## 参与贡献
 
@@ -118,7 +121,7 @@ git push -u origin feature/your-change
 
 ## 隐私说明
 
-本应用不上传数据，也不包含网络请求。配置、图片缓存和开机自启动项均保存在本机。
+本应用不上传数据，也不包含网络请求。配置、图片/GIF 缓存和开机自启动项均保存在本机。
 
 ## 许可证
 

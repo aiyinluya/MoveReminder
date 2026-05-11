@@ -104,16 +104,22 @@ public sealed class ReminderSession : IDisposable
 
     private static Image? TryLoadSharedImage(AppSettings settings)
     {
-        if (settings.ReminderMode != ReminderMode.Image
-            || string.IsNullOrWhiteSpace(settings.ImagePath)
-            || !File.Exists(settings.ImagePath))
+        var path = settings.ReminderMode switch
+        {
+            ReminderMode.Image => settings.ImagePath,
+            ReminderMode.Creative => settings.CreativeGifPath,
+            ReminderMode.Text => string.Empty,
+            _ => string.Empty
+        };
+
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
             return null;
         }
 
         try
         {
-            return Image.FromFile(settings.ImagePath);
+            return Image.FromFile(path);
         }
         catch
         {

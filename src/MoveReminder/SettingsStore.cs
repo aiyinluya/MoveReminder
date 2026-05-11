@@ -49,12 +49,25 @@ public static class SettingsStore
 
             var json = File.ReadAllText(path);
             var loaded = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions);
-            return loaded ?? new AppSettings();
+            return Normalize(loaded ?? new AppSettings());
         }
         catch
         {
             return new AppSettings();
         }
+    }
+
+    private static AppSettings Normalize(AppSettings settings)
+    {
+        settings.CreativeGifSizePercent = Math.Clamp(
+            settings.CreativeGifSizePercent == 100 && settings.CreativeGifMaxWidthPercent != 100
+                ? settings.CreativeGifMaxWidthPercent
+                : settings.CreativeGifSizePercent,
+            10,
+            100);
+        settings.CreativeGifMaxWidthPercent = Math.Clamp(settings.CreativeGifMaxWidthPercent, 10, 100);
+        settings.CreativeGifMaxHeightPercent = Math.Clamp(settings.CreativeGifMaxHeightPercent, 10, 100);
+        return settings;
     }
 
     public static void Save(AppSettings settings)

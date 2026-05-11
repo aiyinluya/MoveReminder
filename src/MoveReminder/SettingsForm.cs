@@ -17,9 +17,31 @@ public sealed class SettingsForm : Form
     };
     private readonly TextBox _imagePath = new() { Font = UiTheme.BodyFont, BorderStyle = BorderStyle.FixedSingle, MinimumSize = new Size(80, 28) };
     private readonly Button _browse = new() { Text = "浏览…", Size = new Size(96, 30), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+    private readonly TextBox _creativePath = new() { Font = UiTheme.BodyFont, BorderStyle = BorderStyle.FixedSingle, MinimumSize = new Size(80, 28) };
+    private readonly Button _creativeBrowse = new() { Text = "浏览…", Size = new Size(96, 30), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+    private readonly RadioButton _creativeLayoutFullscreenRadio = new()
+    {
+        Text = "全屏自适应",
+        AutoSize = true,
+        Font = UiTheme.BodyFont,
+        ForeColor = UiTheme.BodyText,
+        Margin = new Padding(0, 2, 28, 0),
+        TabStop = true
+    };
+    private readonly RadioButton _creativeLayoutCustomRadio = new()
+    {
+        Text = "自定义尺寸",
+        AutoSize = true,
+        Font = UiTheme.BodyFont,
+        ForeColor = UiTheme.BodyText,
+        Margin = new Padding(0, 2, 0, 0),
+        TabStop = true
+    };
+    private readonly NumericUpDown _creativeSizePercent = new() { Minimum = 10, Maximum = 100, Width = 70, Font = UiTheme.BodyFont };
     private readonly NumericUpDown _autoClose = new() { Minimum = 10, Maximum = AutoCloseAbsoluteMaxSeconds, Width = 78, Font = UiTheme.BodyFont };
     private readonly NumericUpDown _trayWarningPercent = new() { Minimum = 1, Maximum = 99, Width = 78, Font = UiTheme.BodyFont };
     private readonly NumericUpDown _trayUrgentPercent = new() { Minimum = 1, Maximum = 98, Width = 78, Font = UiTheme.BodyFont };
+    private readonly CheckBox _showImmediately = new() { Text = "保存后立即展示", AutoSize = true, Font = UiTheme.BodyFont, ForeColor = UiTheme.BodyText };
     private readonly CheckBox _startup = new() { Text = "开机自动启动", AutoSize = true, Font = UiTheme.BodyFont, ForeColor = UiTheme.BodyText };
     private readonly RadioButton _modeTextRadio = new()
     {
@@ -36,12 +58,29 @@ public sealed class SettingsForm : Form
         AutoSize = true,
         Font = UiTheme.BodyFont,
         ForeColor = UiTheme.BodyText,
+        Margin = new Padding(0, 2, 28, 10),
+        TabStop = true
+    };
+    private readonly RadioButton _modeCreativeRadio = new()
+    {
+        Text = "创意提醒",
+        AutoSize = true,
+        Font = UiTheme.BodyFont,
+        ForeColor = UiTheme.BodyText,
         Margin = new Padding(0, 2, 0, 10),
         TabStop = true
     };
     private readonly Panel _textPanel = new() { BackColor = Color.Transparent, Padding = new Padding(0, 2, 0, 0) };
     private readonly Panel _imagePanel = new() { BackColor = Color.Transparent, Padding = new Padding(0, 2, 0, 0) };
+    private readonly Panel _creativePanel = new() { BackColor = Color.Transparent, Padding = new Padding(0, 2, 0, 0) };
     private readonly PictureBox _imagePreview = new()
+    {
+        SizeMode = PictureBoxSizeMode.Zoom,
+        BorderStyle = BorderStyle.None,
+        BackColor = Color.FromArgb(248, 250, 252),
+        Margin = Padding.Empty
+    };
+    private readonly PictureBox _creativePreview = new()
     {
         SizeMode = PictureBoxSizeMode.Zoom,
         BorderStyle = BorderStyle.None,
@@ -51,21 +90,30 @@ public sealed class SettingsForm : Form
     private ThumbnailFlowPanel _historyFlow = null!;
     private Panel _historyViewport = null!;
     private ThinScrollBar _historyHScroll = null!;
+    private ThumbnailFlowPanel _creativeHistoryFlow = null!;
+    private Panel _creativeHistoryViewport = null!;
+    private ThinScrollBar _creativeHistoryHScroll = null!;
     private int _historyLayoutFlowW;
     private int _historyLayoutFlowPadX;
     private int _historyLayoutFlowPadY;
     private int _historyLayoutMinFlowInnerH;
+    private int _creativeHistoryLayoutFlowW;
+    private int _creativeHistoryLayoutFlowPadX;
+    private int _creativeHistoryLayoutFlowPadY;
+    private int _creativeHistoryLayoutMinFlowInnerH;
     private bool _syncingReminderTextScroll;
     private int _previewLoadVersion;
+    private int _creativePreviewLoadVersion;
     private int _historyLoadVersion;
+    private int _creativeHistoryLoadVersion;
     private bool _historyThumbnailsLoaded;
+    private bool _creativeHistoryThumbnailsLoaded;
     private readonly TableLayoutPanel _root;
     private readonly Panel _header;
     private readonly Label _headerSubtitle;
     private readonly Panel _cardWrap;
     private readonly TableLayoutPanel _settingsBody;
     private readonly Panel _generalChrome;
-    private readonly FlowLayoutPanel _buttons;
     private readonly Button _saveButton;
     private readonly TextColorPickerSection _colorPicker;
     private AppSettings _working;
@@ -81,8 +129,8 @@ public sealed class SettingsForm : Form
         MinimizeBox = true;
         ShowInTaskbar = true;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(780, 748);
-        MinimumSize = new Size(720, 680);
+        ClientSize = new Size(780, 680);
+        MinimumSize = new Size(720, 620);
         BackColor = UiTheme.PageBack;
         Font = UiTheme.BodyFont;
         Icon = AppIconFactory.CloneForForm();
@@ -91,21 +139,33 @@ public sealed class SettingsForm : Form
         SyncAutoCloseMaximum();
         _text.Text = _working.ReminderText;
         _imagePath.Text = _working.ImagePath;
+        _creativePath.Text = _working.CreativeGifPath;
+        if (_working.CreativeGifLayoutMode == CreativeGifLayoutMode.CustomSize)
+            _creativeLayoutCustomRadio.Checked = true;
+        else
+            _creativeLayoutFullscreenRadio.Checked = true;
+        _creativeSizePercent.Value = decimal.Clamp(_working.CreativeGifSizePercent, _creativeSizePercent.Minimum, _creativeSizePercent.Maximum);
         _autoClose.Value = decimal.Clamp(_working.AutoCloseSeconds, _autoClose.Minimum, _autoClose.Maximum);
         _trayWarningPercent.Value = decimal.Clamp(_working.TrayWarningPercent, _trayWarningPercent.Minimum, _trayWarningPercent.Maximum);
         _trayUrgentPercent.Value = decimal.Clamp(_working.TrayUrgentPercent, _trayUrgentPercent.Minimum, _trayUrgentPercent.Maximum);
+        _showImmediately.Checked = _working.ShowImmediatelyAfterSave;
         _startup.Checked = _working.StartWithWindows;
 
         _colorPicker = new TextColorPickerSection(ReminderTextColorHelper.Resolve(_working.ReminderTextColorHex));
 
         _browse.FlatAppearance.BorderColor = UiTheme.Border;
         _browse.Click += Browse_Click;
+        _creativeBrowse.FlatAppearance.BorderColor = UiTheme.Border;
+        _creativeBrowse.Click += CreativeBrowse_Click;
+        _creativeLayoutFullscreenRadio.CheckedChanged += (_, _) => ApplyCreativeLayoutModeControls();
+        _creativeLayoutCustomRadio.CheckedChanged += (_, _) => ApplyCreativeLayoutModeControls();
 
         _interval.ValueChanged += (_, _) => SyncAutoCloseMaximum();
         HookNumericEnterCommit(_interval);
         HookNumericEnterCommit(_autoClose);
         HookNumericEnterCommit(_trayWarningPercent);
         HookNumericEnterCommit(_trayUrgentPercent);
+        HookNumericEnterCommit(_creativeSizePercent);
 
         _text.TextChanged += (_, _) => SyncReminderTextScrollbars();
         _text.SizeChanged += (_, _) => SyncReminderTextScrollbars();
@@ -119,12 +179,11 @@ public sealed class SettingsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 2,
             Padding = Padding.Empty
         };
         _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
         _root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
 
         _header = new Panel { Dock = DockStyle.Fill, BackColor = UiTheme.Primary };
         _header.Controls.Add(new Label
@@ -163,11 +222,46 @@ public sealed class SettingsForm : Form
         _settingsBody.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, generalColumnWidth));
         _settingsBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-        var generalFill = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty };
+        _saveButton = new Button
+        {
+            Text = "保存",
+            Width = 112,
+            Height = 36,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = UiTheme.PrimaryFor(TrayIconState.Normal),
+            ForeColor = Color.White,
+            Cursor = Cursors.Hand,
+            Font = new Font(UiTheme.BodyFont.FontFamily, UiTheme.BodyFont.Size + 0.25f, FontStyle.Bold, UiTheme.BodyFont.Unit),
+            Margin = new Padding(0)
+        };
+        _saveButton.FlatAppearance.BorderSize = 0;
+        _saveButton.Click += SaveButton_Click;
+
+        var generalFill = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            ColumnCount = 1,
+            BackColor = Color.Transparent,
+            Padding = Padding.Empty
+        };
+        generalFill.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        generalFill.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        generalFill.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         var generalTable = BuildGeneralTable();
         generalTable.Dock = DockStyle.Top;
         generalTable.AutoSize = true;
-        generalFill.Controls.Add(generalTable);
+        generalFill.Controls.Add(generalTable, 0, 0);
+        var saveHost = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 8, 0, 0)
+        };
+        saveHost.Controls.Add(_saveButton);
+        generalFill.Controls.Add(saveHost, 0, 2);
 
         _generalChrome = CreateFillHeightCard("常规", generalFill);
         _generalChrome.Dock = DockStyle.Fill;
@@ -176,6 +270,7 @@ public sealed class SettingsForm : Form
 
         _modeTextRadio.CheckedChanged += ReminderModeRadios_CheckedChanged;
         _modeImageRadio.CheckedChanged += ReminderModeRadios_CheckedChanged;
+        _modeCreativeRadio.CheckedChanged += ReminderModeRadios_CheckedChanged;
 
         var modeRow = new FlowLayoutPanel
         {
@@ -189,6 +284,7 @@ public sealed class SettingsForm : Form
         };
         modeRow.Controls.Add(_modeTextRadio);
         modeRow.Controls.Add(_modeImageRadio);
+        modeRow.Controls.Add(_modeCreativeRadio);
 
         var textTable = BuildTextBodyTable();
         textTable.Dock = DockStyle.Fill;
@@ -200,9 +296,15 @@ public sealed class SettingsForm : Form
         _imagePanel.Dock = DockStyle.Fill;
         _imagePanel.Controls.Add(imageRoot);
 
+        var creativeRoot = BuildCreativeTabContent();
+        creativeRoot.Dock = DockStyle.Fill;
+        _creativePanel.Dock = DockStyle.Fill;
+        _creativePanel.Controls.Add(creativeRoot);
+
         var dualHost = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty };
         dualHost.Controls.Add(_textPanel);
         dualHost.Controls.Add(_imagePanel);
+        dualHost.Controls.Add(_creativePanel);
 
         var reminderInner = new TableLayoutPanel
         {
@@ -224,56 +326,17 @@ public sealed class SettingsForm : Form
 
         if (_working.ReminderMode == ReminderMode.Image)
             _modeImageRadio.Checked = true;
+        else if (_working.ReminderMode == ReminderMode.Creative)
+            _modeCreativeRadio.Checked = true;
         else
             _modeTextRadio.Checked = true;
         ApplyReminderModePanels();
+        ApplyCreativeLayoutModeControls();
 
         _cardWrap.Controls.Add(_settingsBody);
 
-        _buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(18, 4, 18, 10),
-            BackColor = UiTheme.PageBack,
-            WrapContents = false
-        };
-        _saveButton = new Button
-        {
-            Text = "保存",
-            Width = 112,
-            Height = 36,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = UiTheme.PrimaryFor(TrayIconState.Normal),
-            ForeColor = Color.White,
-            Cursor = Cursors.Hand,
-            Font = new Font(UiTheme.BodyFont.FontFamily, UiTheme.BodyFont.Size + 0.25f, FontStyle.Bold, UiTheme.BodyFont.Unit),
-            Margin = new Padding(10, 4, 0, 0)
-        };
-        _saveButton.FlatAppearance.BorderSize = 0;
-        _saveButton.Click += SaveButton_Click;
-
-        var cancel = new Button
-        {
-            Text = "取消",
-            DialogResult = DialogResult.Cancel,
-            Width = 104,
-            Height = 36,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.White,
-            ForeColor = UiTheme.BodyText,
-            Cursor = Cursors.Hand,
-            Margin = new Padding(10, 4, 0, 0)
-        };
-        cancel.FlatAppearance.BorderColor = UiTheme.Border;
-        _buttons.Controls.Add(_saveButton);
-        _buttons.Controls.Add(cancel);
-
-        CancelButton = cancel;
-
         _root.Controls.Add(_header, 0, 0);
         _root.Controls.Add(_cardWrap, 0, 1);
-        _root.Controls.Add(_buttons, 0, 2);
         Controls.Add(_root);
 
         FormClosed += SettingsForm_FormClosed;
@@ -285,6 +348,11 @@ public sealed class SettingsForm : Form
                 QueueImagePreviewRefresh();
                 QueueHistoryThumbnailsRefresh(force: false);
             }
+            else if (_modeCreativeRadio.Checked)
+            {
+                QueueCreativePreviewRefresh();
+                QueueCreativeHistoryThumbnailsRefresh(force: false);
+            }
             SyncReminderTextScrollbars();
         };
 
@@ -293,6 +361,12 @@ public sealed class SettingsForm : Form
             if (_modeImageRadio.Checked)
                 QueueImagePreviewRefresh();
             SyncHistorySelection();
+        };
+        _creativePath.TextChanged += (_, _) =>
+        {
+            if (_modeCreativeRadio.Checked)
+                QueueCreativePreviewRefresh();
+            SyncCreativeHistorySelection();
         };
     }
 
@@ -339,8 +413,21 @@ public sealed class SettingsForm : Form
             }
         }
 
+        if (_creativeHistoryFlow is not null)
+        {
+            while (_creativeHistoryFlow.Controls.Count > 0)
+            {
+                var w = _creativeHistoryFlow.Controls[0];
+                _creativeHistoryFlow.Controls.Remove(w);
+                w.Dispose();
+            }
+        }
+
         var prev = _imagePreview.Image;
         _imagePreview.Image = null;
+        prev?.Dispose();
+        prev = _creativePreview.Image;
+        _creativePreview.Image = null;
         prev?.Dispose();
     }
 
@@ -362,6 +449,7 @@ public sealed class SettingsForm : Form
         AddRow(table, row++, "自动关闭", CreateUnitEditor(_autoClose, "秒"), stretch: false);
         AddRow(table, row++, "变黄阈值", CreateUnitEditor(_trayWarningPercent, "%"), stretch: false);
         AddRow(table, row++, "变红阈值", CreateUnitEditor(_trayUrgentPercent, "%"), stretch: false);
+        AddRow(table, row++, string.Empty, _showImmediately, stretch: false);
         AddRow(table, row++, string.Empty, _startup, stretch: false);
 
         return table;
@@ -598,6 +686,202 @@ public sealed class SettingsForm : Form
         return root;
     }
 
+    private TableLayoutPanel BuildCreativeTabContent()
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = Padding.Empty,
+            BackColor = Color.Transparent
+        };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+
+        var pathRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 10));
+        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+
+        _creativePath.Dock = DockStyle.Fill;
+        _creativePath.Margin = Padding.Empty;
+        pathRow.Controls.Add(_creativePath, 0, 0);
+
+        _creativeBrowse.Dock = DockStyle.Fill;
+        _creativeBrowse.Margin = Padding.Empty;
+        pathRow.Controls.Add(_creativeBrowse, 2, 0);
+        root.Controls.Add(pathRow, 0, 0);
+
+        var creativeBody = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            Padding = Padding.Empty
+        };
+
+        var previewChrome = new Panel
+        {
+            BackColor = Color.FromArgb(220, 227, 237),
+            Padding = new Padding(1),
+            Margin = Padding.Empty
+        };
+        _creativePreview.Dock = DockStyle.Fill;
+        _creativePreview.SizeMode = PictureBoxSizeMode.Zoom;
+        previewChrome.Controls.Add(_creativePreview);
+
+        var creativeHistCaption = new Label
+        {
+            Text = "最近使用",
+            ForeColor = UiTheme.BodyText,
+            Font = new Font(UiTheme.BodyFont.FontFamily, 9.25f, FontStyle.Bold, UiTheme.BodyFont.Unit),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(0, 0, 0, 6),
+            AutoSize = false,
+            Height = 26
+        };
+
+        var creativeHistoryStrip = new Panel
+        {
+            BackColor = Color.FromArgb(236, 241, 248),
+            Padding = new Padding(0),
+            AutoScroll = false
+        };
+
+        _creativeHistoryViewport = new Panel
+        {
+            BackColor = Color.White,
+            Padding = Padding.Empty,
+            Dock = DockStyle.Fill
+        };
+        _creativeHistoryHScroll = new ThinScrollBar(ThinScrollOrientation.Horizontal)
+        {
+            Dock = DockStyle.Bottom,
+            Visible = false
+        };
+        _creativeHistoryHScroll.ValueChanged += (_, _) => ApplyCreativeHistoryScrollX();
+
+        _creativeHistoryFlow = new ThumbnailFlowPanel
+        {
+            AutoSize = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(12, 8, 14, 8),
+            Margin = Padding.Empty,
+            BackColor = Color.White,
+            Location = new Point(0, 0)
+        };
+        _creativeHistoryViewport.Controls.Add(_creativeHistoryFlow);
+        creativeHistoryStrip.Controls.Add(_creativeHistoryViewport);
+        creativeHistoryStrip.Controls.Add(_creativeHistoryHScroll);
+
+        creativeBody.Controls.Add(previewChrome);
+        creativeBody.Controls.Add(creativeHistCaption);
+        creativeBody.Controls.Add(creativeHistoryStrip);
+
+        void LayoutCreativeBody(object? sender, LayoutEventArgs e)
+        {
+            const int gap = 10;
+            const int capH = 26;
+            const int flowPadX = 12;
+            const int flowPadY = 8;
+            var minFlowInnerH = _creativeHistoryFlow.Padding.Vertical + HistoryThumbTile.MinOuterHeight;
+            var historyBlockMin = flowPadY * 2 + minFlowInnerH + ThinScrollBar.BarThickness;
+
+            var w = Math.Max(1, creativeBody.ClientSize.Width);
+            var availH = creativeBody.ClientSize.Height;
+            var reservedBelowPreview = gap + capH + historyBlockMin;
+            var previewH = Math.Max(0, availH - reservedBelowPreview);
+
+            previewChrome.SetBounds(0, 0, w, previewH);
+            creativeHistCaption.SetBounds(0, previewH + gap, w, capH);
+            var histTop = previewH + gap + capH;
+            var histH = availH - histTop;
+            creativeHistoryStrip.SetBounds(0, histTop, w, histH);
+
+            var innerW = Math.Max(1, creativeHistoryStrip.ClientSize.Width - 2 * flowPadX);
+            _creativeHistoryFlow.SuspendLayout();
+            _creativeHistoryFlow.AutoSize = false;
+            _creativeHistoryFlow.PerformLayout();
+            var prefW = _creativeHistoryFlow.GetPreferredSize(new Size(0, minFlowInnerH)).Width;
+            var flowW = Math.Max(innerW, prefW);
+
+            _creativeHistoryLayoutFlowPadX = flowPadX;
+            _creativeHistoryLayoutFlowPadY = flowPadY;
+            _creativeHistoryLayoutFlowW = flowW;
+            _creativeHistoryLayoutMinFlowInnerH = minFlowInnerH;
+
+            var maxScroll = Math.Max(0, flowW - innerW);
+            _creativeHistoryHScroll.Visible = maxScroll > 0;
+            _creativeHistoryHScroll.SetScrollRange(0, maxScroll, Math.Max(1, innerW), resetValue: false);
+            if (_creativeHistoryHScroll.Value > maxScroll)
+                _creativeHistoryHScroll.Value = maxScroll;
+
+            ApplyCreativeHistoryScrollX();
+            _creativeHistoryFlow.ResumeLayout(true);
+        }
+
+        creativeBody.Layout += LayoutCreativeBody;
+        root.Controls.Add(creativeBody, 0, 1);
+
+        var layoutRow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 10, 0, 0)
+        };
+        layoutRow.Controls.Add(_creativeLayoutFullscreenRadio);
+        layoutRow.Controls.Add(_creativeLayoutCustomRadio);
+        root.Controls.Add(layoutRow, 0, 2);
+
+        var sizeRow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 10, 0, 0)
+        };
+        sizeRow.Controls.Add(new Label
+        {
+            Text = "显示大小",
+            AutoSize = true,
+            ForeColor = UiTheme.MutedText,
+            Font = UiTheme.BodyFont,
+            Margin = new Padding(0, 7, 8, 0)
+        });
+        sizeRow.Controls.Add(_creativeSizePercent);
+        sizeRow.Controls.Add(new Label
+        {
+            Text = "%（保持原比例）",
+            AutoSize = true,
+            ForeColor = UiTheme.MutedText,
+            Font = UiTheme.BodyFont,
+            Margin = new Padding(6, 7, 0, 0)
+        });
+        root.Controls.Add(sizeRow, 0, 3);
+
+        return root;
+    }
+
+    private void ApplyCreativeLayoutModeControls()
+    {
+        var custom = _creativeLayoutCustomRadio.Checked;
+        _creativeSizePercent.Enabled = custom;
+    }
+
     private void ReminderModeRadios_CheckedChanged(object? sender, EventArgs e)
     {
         ApplyReminderModePanels();
@@ -606,12 +890,19 @@ public sealed class SettingsForm : Form
     private void ApplyReminderModePanels()
     {
         var image = _modeImageRadio.Checked;
-        _textPanel.Visible = !image;
+        var creative = _modeCreativeRadio.Checked;
+        _textPanel.Visible = !image && !creative;
         _imagePanel.Visible = image;
+        _creativePanel.Visible = creative;
         if (image)
         {
             QueueImagePreviewRefresh();
             QueueHistoryThumbnailsRefresh(force: false);
+        }
+        else if (creative)
+        {
+            QueueCreativePreviewRefresh();
+            QueueCreativeHistoryThumbnailsRefresh(force: false);
         }
     }
 
@@ -707,6 +998,91 @@ public sealed class SettingsForm : Form
         prev?.Dispose();
     }
 
+    private async void QueueCreativePreviewRefresh()
+    {
+        var version = Interlocked.Increment(ref _creativePreviewLoadVersion);
+        var p = _creativePath.Text.Trim();
+        if (string.IsNullOrEmpty(p) || !File.Exists(p))
+        {
+            if (version == _creativePreviewLoadVersion)
+                ReplaceCreativePreviewImage(null);
+            return;
+        }
+
+        Bitmap? next = null;
+        try
+        {
+            const int genW = 960;
+            const int genH = 540;
+            next = await Task.Run(() => ImagePreviewHelper.CreateUniformFitBitmap(p, genW, genH));
+            if (IsDisposed || version != _creativePreviewLoadVersion || !string.Equals(_creativePath.Text.Trim(), p, StringComparison.OrdinalIgnoreCase))
+            {
+                next.Dispose();
+                return;
+            }
+
+            ReplaceCreativePreviewImage(next);
+            next = null;
+        }
+        catch
+        {
+            if (!IsDisposed && version == _creativePreviewLoadVersion)
+                ReplaceCreativePreviewImage(null);
+        }
+        finally
+        {
+            next?.Dispose();
+        }
+    }
+
+    private void ReplaceCreativePreviewImage(Image? next)
+    {
+        var prev = _creativePreview.Image;
+        _creativePreview.Image = next;
+        prev?.Dispose();
+    }
+
+    private async void QueueCreativeHistoryThumbnailsRefresh(bool force)
+    {
+        if (!force && _creativeHistoryThumbnailsLoaded)
+        {
+            SyncCreativeHistorySelection();
+            return;
+        }
+
+        var version = Interlocked.Increment(ref _creativeHistoryLoadVersion);
+        List<(string Path, Bitmap Thumb)> thumbs;
+        try
+        {
+            thumbs = await Task.Run(() =>
+            {
+                var items = new List<(string Path, Bitmap Thumb)>();
+                foreach (var path in CreativeReminderCache.ListCachedNewestFirst(24))
+                {
+                    var thumb = TryCreateHistoryThumb(path);
+                    if (thumb is not null)
+                        items.Add((path, thumb));
+                }
+
+                return items;
+            });
+        }
+        catch
+        {
+            return;
+        }
+
+        if (IsDisposed || version != _creativeHistoryLoadVersion)
+        {
+            foreach (var item in thumbs)
+                item.Thumb.Dispose();
+            return;
+        }
+
+        ReplaceCreativeHistoryThumbnails(thumbs);
+        _creativeHistoryThumbnailsLoaded = true;
+    }
+
     private async void QueueHistoryThumbnailsRefresh(bool force)
     {
         if (!force && _historyThumbnailsLoaded)
@@ -781,6 +1157,23 @@ public sealed class SettingsForm : Form
         RequestHistoryLayout();
     }
 
+    private void ReplaceCreativeHistoryThumbnails(IReadOnlyList<(string Path, Bitmap Thumb)> thumbs)
+    {
+        ClearCreativeHistoryThumbnails();
+
+        var current = _creativePath.Text.Trim();
+        foreach (var (path, thumb) in thumbs)
+        {
+            var tile = new HistoryThumbTile(path, thumb);
+            tile.PathSelected += (_, p) => OnCreativeHistoryThumbPathSelected(p);
+            tile.SetSelected(string.Equals(path, current, StringComparison.OrdinalIgnoreCase));
+            _creativeHistoryFlow.Controls.Add(tile);
+        }
+
+        _creativeHistoryFlow.PerformLayout();
+        RequestCreativeHistoryLayout();
+    }
+
     private void RequestHistoryLayout()
     {
         var viewport = _historyFlow.Parent;
@@ -793,12 +1186,34 @@ public sealed class SettingsForm : Form
         imageBody?.Invalidate(true);
     }
 
+    private void RequestCreativeHistoryLayout()
+    {
+        var viewport = _creativeHistoryFlow.Parent;
+        var historyStrip = viewport?.Parent;
+        var creativeBody = historyStrip?.Parent;
+
+        viewport?.PerformLayout();
+        historyStrip?.PerformLayout();
+        creativeBody?.PerformLayout();
+        creativeBody?.Invalidate(true);
+    }
+
     private void ClearHistoryThumbnails()
     {
         while (_historyFlow.Controls.Count > 0)
         {
             var w = _historyFlow.Controls[0];
             _historyFlow.Controls.Remove(w);
+            w.Dispose();
+        }
+    }
+
+    private void ClearCreativeHistoryThumbnails()
+    {
+        while (_creativeHistoryFlow.Controls.Count > 0)
+        {
+            var w = _creativeHistoryFlow.Controls[0];
+            _creativeHistoryFlow.Controls.Remove(w);
             w.Dispose();
         }
     }
@@ -816,6 +1231,19 @@ public sealed class SettingsForm : Form
         }
     }
 
+    private void SyncCreativeHistorySelection()
+    {
+        if (_creativeHistoryFlow is null || _creativeHistoryFlow.IsDisposed)
+            return;
+
+        var cur = _creativePath.Text.Trim();
+        foreach (Control c in _creativeHistoryFlow.Controls)
+        {
+            if (c is HistoryThumbTile t)
+                t.SetSelected(string.Equals(t.FilePath, cur, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
     private void OnHistoryThumbPathSelected(string? path)
     {
         if (string.IsNullOrEmpty(path))
@@ -823,6 +1251,15 @@ public sealed class SettingsForm : Form
         _imagePath.Text = path;
         QueueImagePreviewRefresh();
         SyncHistorySelection();
+    }
+
+    private void OnCreativeHistoryThumbPathSelected(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return;
+        _creativePath.Text = path;
+        QueueCreativePreviewRefresh();
+        SyncCreativeHistorySelection();
     }
 
     private void OnLoadSyncLayout(object? sender, EventArgs e)
@@ -842,6 +1279,17 @@ public sealed class SettingsForm : Form
             _historyLayoutFlowPadY,
             _historyLayoutFlowW,
             _historyLayoutMinFlowInnerH);
+    }
+
+    private void ApplyCreativeHistoryScrollX()
+    {
+        if (_creativeHistoryFlow is null || _creativeHistoryHScroll is null || _creativeHistoryFlow.IsDisposed)
+            return;
+        _creativeHistoryFlow.SetBounds(
+            _creativeHistoryLayoutFlowPadX - _creativeHistoryHScroll.Value,
+            _creativeHistoryLayoutFlowPadY,
+            _creativeHistoryLayoutFlowW,
+            _creativeHistoryLayoutMinFlowInnerH);
     }
 
     private void SyncReminderTextScrollbars()
@@ -921,12 +1369,24 @@ public sealed class SettingsForm : Form
     {
         error = string.Empty;
         _working.IntervalMinutes = (int)_interval.Value;
-        _working.ReminderMode = _modeImageRadio.Checked ? ReminderMode.Image : ReminderMode.Text;
+        _working.ReminderMode = _modeCreativeRadio.Checked
+            ? ReminderMode.Creative
+            : _modeImageRadio.Checked
+                ? ReminderMode.Image
+                : ReminderMode.Text;
         _working.ReminderText = _text.Text.Trim();
         _working.ImagePath = _imagePath.Text.Trim();
+        _working.CreativeGifPath = _creativePath.Text.Trim();
+        _working.CreativeGifLayoutMode = _creativeLayoutCustomRadio.Checked
+            ? CreativeGifLayoutMode.CustomSize
+            : CreativeGifLayoutMode.FullscreenAdaptive;
+        _working.CreativeGifSizePercent = (int)_creativeSizePercent.Value;
+        _working.CreativeGifMaxWidthPercent = _working.CreativeGifSizePercent;
+        _working.CreativeGifMaxHeightPercent = _working.CreativeGifSizePercent;
         _working.AutoCloseSeconds = (int)_autoClose.Value;
         _working.TrayWarningPercent = (int)_trayWarningPercent.Value;
         _working.TrayUrgentPercent = (int)_trayUrgentPercent.Value;
+        _working.ShowImmediatelyAfterSave = _showImmediately.Checked;
         _working.StartWithWindows = _startup.Checked;
         _working.ReminderTextColorHex = ReminderTextColorHelper.ToStorageHex(_colorPicker.SelectedColor);
 
@@ -951,6 +1411,12 @@ public sealed class SettingsForm : Form
         if (_working.ReminderMode == ReminderMode.Image && string.IsNullOrWhiteSpace(_working.ImagePath))
         {
             error = "图片提醒模式下，请填写图片路径或点击浏览选择文件。";
+            return false;
+        }
+
+        if (_working.ReminderMode == ReminderMode.Creative && string.IsNullOrWhiteSpace(_working.CreativeGifPath))
+        {
+            error = "创意提醒模式下，请选择 GIF 文件。";
             return false;
         }
 
@@ -989,6 +1455,29 @@ public sealed class SettingsForm : Form
 
         QueueImagePreviewRefresh();
         QueueHistoryThumbnailsRefresh(force: true);
+    }
+
+    private void CreativeBrowse_Click(object? sender, EventArgs e)
+    {
+        using var dlg = new OpenFileDialog
+        {
+            Filter = "GIF 动画|*.gif|所有文件|*.*",
+            Title = "选择创意提醒 GIF"
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            var cached = CreativeReminderCache.CopyGifIntoCache(dlg.FileName);
+            _creativePath.Text = cached;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"无法缓存创意 GIF：{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        QueueCreativePreviewRefresh();
+        QueueCreativeHistoryThumbnailsRefresh(force: true);
     }
 
     private static void AddRow(TableLayoutPanel table, int row, string labelText, Control editor, bool stretch)

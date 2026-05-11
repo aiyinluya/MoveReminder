@@ -5,18 +5,18 @@ public sealed class ReminderForm : Form
     private readonly AppSettings _settings;
     private readonly ReminderSession _session;
     private readonly Image? _sharedImage;
-    private readonly System.Windows.Forms.Timer _autoCloseTimer;
-    private Label? _countdownLabel;
+    private System.Threading.Timer? _countdownTimer;
+    private CountdownOverlay? _countdownOverlay;
     private Image? _ownedImage;
     private int _remaining;
+    private DateTime _autoCloseAtUtc;
+    private bool _closeRequested;
 
     public ReminderForm(AppSettings settings, Rectangle bounds, ReminderSession session, Image? sharedImage)
     {
         _settings = settings;
         _session = session;
         _sharedImage = sharedImage;
-        _autoCloseTimer = new System.Windows.Forms.Timer { Interval = 1000 };
-        _autoCloseTimer.Tick += AutoCloseTimer_Tick;
 
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
@@ -33,8 +33,10 @@ public sealed class ReminderForm : Form
         base.OnShown(e);
         BuildContent();
         _remaining = Math.Clamp(_settings.AutoCloseSeconds, 10, 600);
+        _autoCloseAtUtc = DateTime.UtcNow.AddSeconds(_remaining);
+        ShowCountdownOverlay();
         UpdateCountdownText();
-        _autoCloseTimer.Start();
+        _countdownTimer = new System.Threading.Timer(CountdownTimer_Tick, null, TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200));
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -51,29 +53,48 @@ public sealed class ReminderForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
-        _autoCloseTimer.Stop();
-        _autoCloseTimer.Dispose();
+        _countdownTimer?.Dispose();
+        if (_countdownOverlay is not null)
+        {
+            _countdownOverlay.Close();
+            _countdownOverlay.Dispose();
+            _countdownOverlay = null;
+        }
         _ownedImage?.Dispose();
         _session.NotifyFormClosed(this);
         base.OnFormClosed(e);
     }
 
+    protected override void OnLocationChanged(EventArgs e)
+    {
+        base.OnLocationChanged(e);
+        LayoutCountdownOverlay();
+    }
+
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        LayoutCountdownOverlay();
+    }
+
     private void BuildContent()
     {
-        var root = new TableLayoutPanel
+        var root = new Panel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
             Padding = new Padding(32)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
 
         var main = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
-        var wantImage = _settings.ReminderMode == ReminderMode.Image
-                        && !string.IsNullOrWhiteSpace(_settings.ImagePath)
-                        && File.Exists(_settings.ImagePath);
+        var mediaPath = _settings.ReminderMode switch
+        {
+            ReminderMode.Image => _settings.ImagePath,
+            ReminderMode.Creative => _settings.CreativeGifPath,
+            _ => string.Empty
+        };
+        var wantImage = (_settings.ReminderMode == ReminderMode.Image || _settings.ReminderMode == ReminderMode.Creative)
+                        && !string.IsNullOrWhiteSpace(mediaPath)
+                        && File.Exists(mediaPath);
         var imageShown = false;
 
         if (wantImage && _sharedImage is not null)
@@ -84,21 +105,21 @@ public sealed class ReminderForm : Form
                 BackColor = BackColor
             };
             main.Controls.Add(picture);
-            ImageCoverLayout.Attach(main, picture, _sharedImage);
+            AttachMediaLayout(main, picture, _sharedImage);
             imageShown = true;
         }
         else if (wantImage)
         {
             try
             {
-                _ownedImage = Image.FromFile(_settings.ImagePath);
+                _ownedImage = Image.FromFile(mediaPath);
                 var picture = new PictureBox
                 {
                     Image = _ownedImage,
                     BackColor = BackColor
                 };
                 main.Controls.Add(picture);
-                ImageCoverLayout.Attach(main, picture, _ownedImage);
+                AttachMediaLayout(main, picture, _ownedImage);
                 imageShown = true;
             }
             catch
@@ -110,10 +131,11 @@ public sealed class ReminderForm : Form
         if (!imageShown)
         {
             var text = _settings.ReminderText;
-            if (!imageShown && _settings.ReminderMode == ReminderMode.Image)
+            if (!imageShown && (_settings.ReminderMode == ReminderMode.Image || _settings.ReminderMode == ReminderMode.Creative))
             {
+                var modeName = _settings.ReminderMode == ReminderMode.Creative ? "创意 GIF" : "图片";
                 text = _settings.ReminderText + Environment.NewLine + Environment.NewLine
-                                            + "（图片无法显示，已使用文字提醒）";
+                                            + $"（{modeName}无法显示，已使用文字提醒）";
             }
 
             var label = new Label
@@ -128,39 +150,86 @@ public sealed class ReminderForm : Form
             main.Controls.Add(label);
         }
 
-        root.Controls.Add(main, 0, 0);
-
-        _countdownLabel = new Label
-        {
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(200, 210, 215),
-            Font = new Font("Microsoft YaHei UI", 15, FontStyle.Regular, GraphicsUnit.Point),
-            AutoSize = false,
-            Margin = new Padding(0, 4, 0, 0)
-        };
-        root.Controls.Add(_countdownLabel, 0, 1);
+        root.Controls.Add(main);
 
         Controls.Add(root);
     }
 
-    private void AutoCloseTimer_Tick(object? sender, EventArgs e)
+    private void AttachMediaLayout(Panel host, PictureBox picture, Image image)
     {
-        _remaining--;
-        UpdateCountdownText();
-        if (_remaining <= 0)
+        if (_settings.ReminderMode == ReminderMode.Creative)
         {
-            _session.RequestCloseAll();
+            if (_settings.CreativeGifLayoutMode == CreativeGifLayoutMode.FullscreenAdaptive)
+            {
+                ImageCoverLayout.Attach(host, picture, image);
+                return;
+            }
+
+            ImageCoverLayout.AttachCenteredFit(
+                host,
+                picture,
+                image,
+                _settings.CreativeGifSizePercent);
+            return;
+        }
+
+        ImageCoverLayout.Attach(host, picture, image);
+    }
+
+    private void CountdownTimer_Tick(object? state)
+    {
+        var remaining = Math.Max(0, (int)Math.Ceiling((_autoCloseAtUtc - DateTime.UtcNow).TotalSeconds));
+        var shouldClose = remaining <= 0;
+
+        try
+        {
+            if (IsDisposed || !IsHandleCreated)
+                return;
+
+            BeginInvoke((MethodInvoker)(() =>
+            {
+                if (IsDisposed)
+                    return;
+
+                _remaining = remaining;
+                UpdateCountdownText();
+                if (shouldClose && !_closeRequested)
+                {
+                    _closeRequested = true;
+                    _session.RequestCloseAll();
+                }
+            }));
+        }
+        catch (InvalidOperationException)
+        {
+            // Form is closing or its handle has gone away.
         }
     }
 
     private void UpdateCountdownText()
     {
-        if (_countdownLabel is null)
+        if (_countdownOverlay is null)
         {
             return;
         }
 
-        _countdownLabel.Text = _remaining > 0 ? $"{_remaining} 秒后关闭" : "正在关闭…";
+        _countdownOverlay.CountdownText = _remaining > 0 ? $"{_remaining} 秒后关闭" : "正在关闭…";
+    }
+
+    private void ShowCountdownOverlay()
+    {
+        _countdownOverlay = new CountdownOverlay();
+        LayoutCountdownOverlay();
+        _countdownOverlay.Show(this);
+    }
+
+    private void LayoutCountdownOverlay()
+    {
+        if (_countdownOverlay is null || _countdownOverlay.IsDisposed)
+            return;
+
+        const int bottomMargin = 28;
+        _countdownOverlay.Left = Left + Math.Max(0, (Width - _countdownOverlay.Width) / 2);
+        _countdownOverlay.Top = Top + Math.Max(0, Height - _countdownOverlay.Height - bottomMargin);
     }
 }

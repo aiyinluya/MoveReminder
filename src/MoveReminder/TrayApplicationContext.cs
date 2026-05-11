@@ -280,6 +280,10 @@ public sealed class TrayApplicationContext : ApplicationContext
             _settings = saved;
             StartupService.Apply(_settings.StartWithWindows, Application.ExecutablePath);
             ScheduleNextFromNow();
+            if (_settings.ShowImmediatelyAfterSave)
+            {
+                TryShowReminder(force: true);
+            }
         }
 
         if (ReferenceEquals(f, _settingsForm))
